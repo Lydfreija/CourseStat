@@ -37,7 +37,6 @@ quantile(out,c(0.025,0.975))
 #or
 mean(x) - 1.96*se_x
 mean(x) + 1.96*se_x
-
 ```
 Exercise: Derive a 95% confidence interval for the CV of x.
 
