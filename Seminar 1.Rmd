@@ -55,4 +55,33 @@ quantile(outcv,c(0.025,0.975))
 
 ```
 
+Optional exercise: The proportional properties of the natural log
+Use simulated data to show the close relationship between the SD of log-transformed data and the CV on
+arithmetic scale. You may need e.g. the rnorm function and a for-loop to achieve this. One strategy would
+be to start with comparing the two values for a single case, then build a matrix to hold the paired values,
+and finally use a for-loop to populate the matrix. See Appendix 1 for help to get started with programming.
+The following figure illustrates the kind of pattern we expect.
+Before starting to work on exercises in R, read the Appendix on reproducibility, and think about whether
+you would like to create a GitHub account for all your materials from this course
+
+```{r}
+
+sdvals <- runif(200,1,10)
+out <- matrix(NA,200,2)
+for(i in 1:200){
+y <- rnorm(n=200, mean=30,sd=sdvals[i])
+out[i,1] <- sd(log(y))
+out[i,2] <- sd(y)/mean(y)
+}
+
+library(ggplot2)
+plot(out[,1],out[,2]) 
+lines(0:1,0:1)
+out1<-data.frame(out)
+colnames(out1) <- c("logsd","CV")
+ggplot(out1,mapping = aes(x = CV, y = logsd)) +
+  geom_point() +
+  geom_abline()
+```
+
 
