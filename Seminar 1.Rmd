@@ -39,8 +39,9 @@ mean(x) - 1.96*se_x
 mean(x) + 1.96*se_x
 ```
 Exercise: Derive a 95% confidence interval for the CV of x.
-
+sample: you will take a sample each time but replace is true so you get a bit different values
 ```{r}
+x <- rnorm(50,10,2)
 cv <- sqrt(sd(x)/mean(x))
 cv_out <- sqrt(sd(out)/mean(out))
 
@@ -66,7 +67,7 @@ you would like to create a GitHub account for all your materials from this cours
 
 ```{r}
 
-sdvals <- runif(200,1,10)
+sdvals <- runif(200,1,5)
 out <- matrix(NA,200,2)
 for(i in 1:200){
 y <- rnorm(n=200, mean=30,sd=sdvals[i])
@@ -75,13 +76,12 @@ out[i,2] <- sd(y)/mean(y)
 }
 
 library(ggplot2)
-plot(out[,1],out[,2]) 
-lines(0:1,0:1)
 out1<-data.frame(out)
 colnames(out1) <- c("logsd","CV")
 ggplot(out1,mapping = aes(x = CV, y = logsd)) +
   geom_point() +
   geom_abline()
 ```
+
 
 
