@@ -1,0 +1,59 @@
+---
+title: "Seminar 1"
+author: "Lydwin Wagenaar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Seminar 2023-11-01
+
+The standard error equation is 
+SE = sqrt(var/n)
+```{r}
+x <- rnorm(n=100, mean=5,sd=1)
+mean(x)
+sd(x)
+hist(x,las=1,main = "")
+
+set.seed(1)
+x <- rnorm(50,10,2)
+se_x <- sqrt(var(x)/length(x))
+
+out = NULL
+outcv = NULL
+for(i in 1:1000){
+sample = sample(x, replace=TRUE)
+out[i] = mean(sample)
+outcv[i] = sqrt(sd(sample)/mean(sample))
+}
+
+hist(out,las=1,main="")
+sd(out)
+quantile(out,c(0.025,0.975))
+#or
+mean(x) - 1.96*se_x
+mean(x) + 1.96*se_x
+
+```
+Exercise: Derive a 95% confidence interval for the CV of x.
+
+```{r}
+cv <- sqrt(sd(x)/mean(x))
+cv_out <- sqrt(sd(out)/mean(out))
+
+
+outcv = NULL
+for(i in 1:1000){
+sample = sample(x, replace=TRUE)
+outcv[i] = sd(sample)/mean(sample)
+}
+
+quantile(outcv,c(0.025,0.975))
+
+```
+
+
