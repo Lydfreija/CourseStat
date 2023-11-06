@@ -83,5 +83,170 @@ ggplot(out1,mapping = aes(x = CV, y = logsd)) +
   geom_abline()
 ```
 
+## Seminar 2023-11-06
+
+```{r}
+set.seed(85)
+x <- rnorm(200,10,2)
+y <- 0.4*x + rnorm(200,0,1)
+plot.new()
+plot(x, y, las=1, xlab = "Leaf length (mm)", ylab = "Leaf width (mm")
+
+#
+
+m <- lm(y~x)
+cf <- m$coefficients
+cf
+
+#
+
+predvals <- cf[1] + cf[2]*x
+par(mfrow = c(1,2)) # Two graphs in one picture
+plot(x,y,las = 1, xlab = "Leaf length (mm)", ylab = "Leaf width(mm)")
+abline(m)
+segments(x,y,x,predvals)
+hist(residuals(m), xlab = "", las=1)
+```
+```{r}
+par(mfrow=c(2,2))
+plot(m)
+```
+Better than using abline is using lines with values from your x
+
+```{r}
+newx = seq(min(x), max(x), length.out=200)
+predy = cf[1] + cf[2]*newx
+plot(x, y, las=1,
+xlab="Leaf length (mm)",
+ylab="Leaf width (mm)")
+lines(newx, predy)
+
+```
+After checking assumption, it is time to look at the summary of our model.
+
+```{r}
+summary(m)
+```
+EXERCISE: Use non-parametric bootstrapping to derive a standard error for the slope of the linear regression above. To do so, produce a data frame holding the x and y values, sample from this dataset (with replacement), fit the model, and save each estimate for the slope of y on x. The samples will give the sampling
+distribution for the slope, and its standard deviation will provide an estimate of the standard error.
+
+SE = sd / sqrt(n)
+regression slope: cov(y,x)/var(x)
+```{r}
+#get the standard error for the slope
+set.seed(85)
+x <- rnorm(200,10,2)
+y <- 0.4*x + rnorm(200,0,1)
+model <- lm(y ~ x)
+summary(model)
+
+frame <- data.frame(x,y)
+est = NULL
+for(i in 1:1000){
+s = frame[sample(1:nrow(frame),replace=T),]
+m1 = lm(y~x, data=s)
+est[i] = m1$coef[2]
+}
+sd(est)
+
+```
+Interpreting results model
+
+```{r}
+cov(y,x)/var(x)
+(cf[2]*(mean(x) + sd(x))) - (cf[2]*mean(x))
+# r2 parameter
+cor(x,y)^2
+# or
+y_hat <- cf[1] + cf[2]*x
+var(y_hat)/var(y) #or cf[2]^2*var(x)
+
+
+```
+Exercise: fitting a linear regression to real data
+Choose any dataset you may have involving a continuous response variable and a continuous predictor. Fit
+a simple linear regression, interpret the results, produce a nice figure including the fitted regression line, and
+write simple methods and results presenting the analysis and results.
+If you don’t have any data, use the dataset bird_allometry in the datasets folder. This dataset contains
+body mass and brain mass for males and females of different bird species. The scaling of brain size (or other
+body parts) with body size is referred to as the study of allometry, and you may want to read about these
+analyses before fitting your models. As a hint, the scaling of parts of a body with body size is expected
+to follow a power-law relationship on the form y = axb
+, which can be linearized through the logarithmic
+transformation log(y) = log(a) + b × log(x).
+
+```{r}
+birds <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/bird_allometry.csv")
+head(birds)
+birds <- birds[birds$Sex == "f",]
+```
+The research question is:
+How do female birds' brain mass depend on their body mass?
+We will do a linear regression between these two variables to test this.
+
+```{r}
+Birdsmodel <- lm(brain_mass~body_mass, birds)
+summary(Birdsmodel)
+par(mfrow=c(2,2))
+plot(Birdsmodel)
+#definitely not nicely normally distributed residuals. We should log it because it is a nice transformation for these variables
+
+birds$logbrain <- log(birds$brain_mass)
+birds$logbody <- log(birds$body_mass)
+Birdsmodellog <- lm(logbrain~logbody, birds)
+
+par(mfrow=c(2,2))
+plot(Birdsmodellog)
+summary(Birdsmodellog)
+#still some outliers but pretty ok
+
+cfbirdlog <- Birdsmodellog$coefficients
+
+newbird = seq(min(birds$logbrain), max(birds$logbody), length.out=200)
+newbirdy = cfbirdlog[1] + cfbirdlog[2]*newbird
+plot(birds$logbody, birds$logbrain, las=1,
+xlab="(Body mass) (log g)",
+ylab="(Brain mass) (log g)")
+lines(newbird, newbirdy)
+
+
+```
+To understand the relationship between body mass of birds and the brain mass of the birds, I fitted a linear regression model to the data, in which log brain mass (log g) was the response variable and log body mass (log g) was the explanatory variable.
+
+The used data included a several female and male bird species. The sample size of our data was 1184 individuals. Overall, we did see that brain mass increased when birds had a higher body mass. For each increase in log(gram) of the body mass, the brainmass increased with 0.58 +- 0.01 log(gram) (table 1, figure 1).
+
+-------------------------------------------------------------------------
+
+Optional exercise: How error in x- and y-variables affect the slope
+The standard linear model assumes that the predictor variable is measured without error. When there is
+measurement error, this can lead to a bias in the estimated slope. Simulate data with measurement error in
+the predictor, and produce a plot showing the effect on the estimated slope. As always with programming
+exercises, start by performing the necessary operations once, before building loops or functions. Here, you
+can start by simulating some data, and fit the model with no measurement error. Then, add some error,
+and see what happens to the slope estimate.
+
+want a graph with estimated slope on y and measurement error on x
+
+```{r}
+empty <- data.frame(matrix(NA,200,2))
+colnames(empty) <- c("measerror", "slope")
+x <- rnorm(200,10,2)
+measerror <-  seq(0.01,0.5,length.out = 200)
+y <- 0.4*x + rnorm(200,0,2)
+plot(x,y)
+for(i in 1:200){
+newx <- x + rnorm(200,0,measerror[i])
+  fittry <- lm(y~newx)
+  coeftry <- summary(fittry)$coef
+  empty[i,1] <- measerror[i]
+  empty[i,2] <- coeftry[2]
+}
+
+plot(empty$measerror,empty$slope,las = 1,
+ylab="Slope estimate",
+xlab="Measurement error")
+
+
+```
 
 
