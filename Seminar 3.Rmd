@@ -107,11 +107,11 @@ data
 
 # lets plot this before we start the analysis, to see how the data looks.
 gp <- ggplot(data, aes(x=species_L, y=mean, colour=species_M, group=species_M))
-gp + geom_line(aes(linetype=species_M), size=.6) +
-  geom_point(aes(shape=species_M), size=3) +
+gp + geom_line(aes(colour=species_M), size=.6) +
+  geom_point(aes(colour=species_M), size=3) +
   geom_errorbar(aes(ymax=mean+se, ymin=mean-se), width=.1) +
   labs(title="",
-        x ="Plant Larvae", y = "Development time (days)")
+        x ="Plant Larvae", y = "Development time (days)", color = "Host Parent")
 ```
 Now check the males vs females
 
@@ -204,17 +204,8 @@ gp + geom_line(aes(linetype=species_M), size=.6) +
 
 
 ```
-If we only look at the anova outcomes, we can see that the development time is dependent on the parent host species, the larvae host species, and that there is an interaction between these two (the interaction looks a bit less strong than the parent host species and larvae host species per se)
-```{r}
-total <- 22.6961 + 1.8167 + 5.3039 + 2.2025
-means
 
 
-
-```
-
-## BarbareaL BerteroaL
-## 22.60445 29.00962
 ```{r}
 colMeans(means) #different larvae host plants
 rowMeans(means) #different maternal host plants
