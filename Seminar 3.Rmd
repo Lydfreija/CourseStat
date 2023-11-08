@@ -2,7 +2,9 @@
 title: "Seminar 3"
 author: "Lydwin Wagenaar"
 date: "`r Sys.Date()`"
-output: html_document
+output:
+  word_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -10,6 +12,215 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 ## Seminar 3
+Lets make some data and do an ANOVA
+```{r}
+library(ggplot2)
+#dataset
+set.seed(100)
+groups = as.factor(rep(c("Low", "Medium", "High"), each=50))
+x = c(rnorm(50, 10, 3), rnorm(50, 13, 3), rnorm(50, 14, 3))
+plot(groups, x, las=1, xlab="",
+ylab="Body size (g)")
+
+
+
+```
+EXTRA EXERCISE: Reproduce a plot similar to this for the ANOVA exercise.
+
+```{r}
+new <- data.frame(groups,x)
+plot(new$groups, new$x, at=c(1.3, 2.3, 3.3),boxwex=0.3,las=1, xlab="",
+ylab="Body size (g)")
+points(new$groups,new$x, col=16)
+points(aggregate(new$x, list(new$groups), FUN=mean), pch = 19 )
+
+```
+
+```{r}
+m = lm(x~groups)
+anova(m)
+
+```
+The Sum Sq are the sums of squares, i.e. the sum of the squared deviations of each observation from the
+grand mean. The total sum of squared (SST ) divided by n − 1 gives the total variance of the sample.
+```{r}
+SS_T = 319.97+1200.43
+SS_T/(150-1)
+var(x)
+```
+We can easily get the proportion of variance explained by the groups variable, which is the same as the r 2 for the model.
+
+```{r}
+319.97/SS_T
+
+```
+```{r}
+summary(m)
+
+```
+Note that if we want a different reference group, we can change the order of the factor levels
+
+```{r}
+groups = factor(groups, levels=c("Low", "Medium", "High"))
+m = lm(x~groups)
+summary(m)
+
+```
+Sometimes we also want to suppress the intercept of the model, and thus estimate the mean and standard
+error for each level of the predictor. We can do this by adding -1 to the model formula (what comes after
+the ~ sign). This could be useful for example, if we wanted to obtain the estimated mean for each group,
+associated for example with a 95% confidence interval.
+
+```{r}
+m = lm(x~groups-1)
+summary(m)$coef
+confint(m)
+
+```
+EXERCISE
+Analyse the data to assess effects of maternal vs. larval host plant on one or more response variable. Interpret the results and produce a nice plot to illustrate.
+
+```{r}
+butterfly <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/butterflies.csv")
+View(butterfly)
+
+#Maternal vs larval host plant #if they have the same host plant vs if they have a different host plant
+
+butterfly$MaternalHost <- paste0(butterfly$MaternalHost, "M")
+butterfly$LarvalHost <- paste0(butterfly$LarvalHost, "L")
+means <- tapply(butterfly$DevelopmentTime, list(butterfly$MaternalHost, butterfly$LarvalHost), mean)
+means
+
+Ses <- tapply(butterfly$DevelopmentTime, 
+       list(butterfly$MaternalHost, butterfly$LarvalHost), 
+       function(x) sd(x)/sqrt(sum(!is.na(x))))
+Ses #[1-4] to take the values
+means #[1-4] to take the values
+#in one table:
+data <- data.frame(NA,2)
+colnames(data) <- c("mean","se")
+data[1:4,1] <- means[1:4]
+data[1:4,2] <- Ses[1:4]
+data$species_M <- c("Barbarea","Berteroa","Barbarea","Berteroa")
+data$species_L <- c("Barbarea","Barbarea","Berteroa","Berteroa")
+data
+
+# lets plot this before we start the analysis, to see how the data looks.
+gp <- ggplot(data, aes(x=species_L, y=mean, colour=species_M, group=species_M))
+gp + geom_line(aes(linetype=species_M), size=.6) +
+  geom_point(aes(shape=species_M), size=3) +
+  geom_errorbar(aes(ymax=mean+se, ymin=mean-se), width=.1) +
+  labs(title="",
+        x ="Plant Larvae", y = "Development time (days)")
+```
+Now check the males vs females
+
+```{r}
+butterflyM <- butterfly[butterfly$Sex == "M",]
+butterflyF <- butterfly[butterfly$Sex == "F",]
+
+butterflyM$MaternalHost <- paste0(butterflyM$MaternalHost, "M")
+butterflyM$LarvalHost <- paste0(butterflyM$LarvalHost, "L")
+meansM <- tapply(butterflyM$DevelopmentTime, list(butterflyM$MaternalHost, butterflyM$LarvalHost), mean)
+meansM
+
+SesM <- tapply(butterflyM$DevelopmentTime, 
+       list(butterflyM$MaternalHost, butterflyM$LarvalHost), 
+       function(x) sd(x)/sqrt(sum(!is.na(x))))
+
+#in one table:
+dataM <- data.frame(NA,2)
+colnames(dataM) <- c("mean","se")
+dataM[1:4,1] <- meansM[1:4]
+dataM[1:4,2] <- SesM[1:4]
+dataM$species_M <- c("Barbarea","Berteroa","Barbarea","Berteroa")
+dataM$species_L <- c("Barbarea","Barbarea","Berteroa","Berteroa")
+
+# lets plot this before we start the analysis, to see how the data looks.
+library(ggplot2)
+gp <- ggplot(dataM, aes(x=species_L, y=mean, colour=species_M, group=species_M))
+gpm <- gp + geom_line(aes(linetype=species_M), size=.6) +
+  geom_point(aes(shape=species_M), size=3) +
+  geom_errorbar(aes(ymax=mean+se, ymin=mean-se), width=.1)
+```
+```{r}
+butterflyF$MaternalHost <- paste0(butterflyF$MaternalHost, "M")
+butterflyF$LarvalHost <- paste0(butterflyF$LarvalHost, "L")
+meansF <- tapply(butterflyF$DevelopmentTime, list(butterflyF$MaternalHost, butterflyF$LarvalHost), mean)
+
+SesF <- tapply(butterflyF$DevelopmentTime, 
+       list(butterflyF$MaternalHost, butterflyF$LarvalHost), 
+       function(x) sd(x)/sqrt(sum(!is.na(x))))
+
+#in one table:
+dataF <- data.frame(NA,2)
+colnames(dataF) <- c("mean","se")
+dataF[1:4,1] <- meansF[1:4]
+dataF[1:4,2] <- SesF[1:4]
+dataF$species_M <- c("Barbarea","Berteroa","Barbarea","Berteroa")
+dataF$species_L <- c("Barbarea","Barbarea","Berteroa","Berteroa")
+
+# lets plot this before we start the analysis, to see how the data looks.
+library(ggplot2)
+gp <- ggplot(dataF, aes(x=species_L, y=mean, colour=species_M, group=species_M))
+gpF <- gp + geom_line(aes(linetype=species_M), size=.6) +
+  geom_point(aes(shape=species_M), size=3) +
+  geom_errorbar(aes(ymax=mean+se, ymin=mean-se), width=.1)
+
+par(mfrow = c(1,2)) # 
+gpm
+gpF
+
+```
+Female and males look super similar so we will proceed by having it all together.
+
+Time for the analysis
+RQ = How does the similarity of the host plant of the parent and larvae affect the development time of their larvae? 
+
+response variable = development time
+Explanatory variables = larval host and maternal host. 
+Now it is time for the analyses
+
+Lets check the assumptions
+
+```{r}
+par(mfrow=c(2,2))
+plot(m)
+```
+The assumption look non-violated
+
+
+```{r}
+m <- lm(DevelopmentTime ~ MaternalHost * LarvalHost, data = butterfly )
+anova(m)
+summary(m)
+gp <- ggplot(data, aes(x=species_L, y=mean, colour=species_M, group=species_M))
+gp + geom_line(aes(linetype=species_M), size=.6) +
+  geom_point(aes(shape=species_M), size=3) +
+  geom_errorbar(aes(ymax=mean+se, ymin=mean-se), width=.1) +
+  labs(title="",
+        x ="Host Larvae", y = "Development time (days)", colour = "Host Parent")
+  
+
+
+```
+If we only look at the anova outcomes, we can see that the development time is dependent on the parent host species, the larvae host species, and that there is an interaction between these two (the interaction looks a bit less strong than the parent host species and larvae host species per se)
+```{r}
+total <- 22.6961 + 1.8167 + 5.3039 + 2.2025
+means
+
+
+
+```
+
+## BarbareaL BerteroaL
+## 22.60445 29.00962
+```{r}
+colMeans(means) #different larvae host plants
+rowMeans(means) #different maternal host plants
+```
+
+
 
 
 
