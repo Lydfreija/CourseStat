@@ -1,0 +1,217 @@
+---
+title: "Seminar 5"
+author: "Lydwin Wagenaar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Seminar 5
+#Binomial and poission distributions
+```{r}
+#rbinom(3, 10, c(0.1, 0.5, 0.9))
+x = seq(from=0, to=1, by=0.01)
+v_b = x*(1-x) #Binomial variance
+plot(x, v_b, type="l", xlab="Probability", ylab="Theoretical variance", las=1)
+```
+```{r}
+logit = function(x) log(x/(1-x))
+invlogit = function(x) 1/(1+exp(-x))
+x = runif(200)
+logit_x = logit(x)
+par(mfrow=c(2,2))
+hist(x, las=1)
+hist(logit_x, las=1)
+xx = seq(-5, 5, 0.01)
+plot(xx, invlogit(xx), type="l", las=1,
+xlab="Logit (x)",
+ylab="P")
+plot(x, invlogit(logit_x), las=1)
+```
+```{r}
+plot(xx, invlogit(xx), type="l", las=1,
+xlab="Logit/Probit (x)",
+ylab="P")
+lines(xx, pnorm(xx), lty=2)
+legend("topleft", legend=c("Logit", "Probit"),
+lty=c(1,2))
+
+```
+#Logistic regression
+```{r}
+x = rnorm(200, 10, 3)
+eta = -2 + 0.4*x + rnorm(200, 0, 2)
+p = invlogit(eta)
+y = rbinom(200, 1, p)
+par(mfrow=c(1,3))
+plot(x, eta, las=1)
+plot(x, p, las=1)
+plot(x, y, las=1)
+```
+```{r}
+m = glm(y~x, family=binomial(link="logit"))
+summary(m)
+
+```
+```{r}
+coefs = summary(m)$coef
+x_pred = seq(from=min(x), to=max(x), by=0.01)
+y_hat = coefs[1,1] + coefs[2,1]*x_pred
+p_hat = invlogit(y_hat)
+plot(x,y,las=1) 
+lines(x_pred,p_hat)
+abline(v=-coefs[1,1]/coefs[2,1], col="blue",lty=2) #v = yhat = 0 because invlogit(0) = 0.5
+abline(h=0.5, col="blue",lty=2)
+
+```
+The GLM summary table does not provide an r
+2 value, because the normal r
+2 does not work for logistic
+regression. There are however several ‘Pseudo-r 2’ available, typically based on comparing the likelihood of
+the model to that of a null model (a similar model but with only an intercept). The MuMIn package provides
+one such measure.
+```{r}
+library(MuMIn)
+r.squaredGLMM(m)
+```
+or Tjur’s D
+```{r}
+y_hat = coefs[1,1] + coefs[2,1]*x
+p_hat = invlogit(y_hat)
+mean(p_hat[which(y==1)]) - mean(p_hat[which(y==0)])
+```
+Some final notes on fitting binomial GLM’s. There are three ways to formulate these models in R. In the
+example above, the data were 0’s and 1’s, and we could specify the model simply as
+```{r}
+glm(y ~ x, family=binomial(link="logit"))
+```
+When each observation is based on more than one trial, we can formulate the model in two ways. The first is
+```{r}
+glm(y ~ x, family=binomial(link="logit"), weights=n)
+```
+
+where y is the proportion of successes, and n is the number of trials. The second method is to fit a two-column
+matrix as response variable, where the first colomn is the number of successes, and the second column is the
+number of failures, i.e. y = cbind(successes, failures). The model formula is then
+```{r}
+glm(cbind(successes, failures) ~ x, family=binomial(link="logit"))
+
+```
+
+##Data exercise: seed germination
+
+```{r}
+Dorm <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/dormancy.csv")
+```
+
+Analyse the data to estimate the pattern of germination success in response to variation in the duration of after-ripening. 
+
+Are the patterns similar in different populations? 
+
+Are there other factors affecting germination success? 
+
+Produce relevant summary statistics, parameter estimates, and graphs.
+
+```{r}
+#first explore the data
+hist(Dorm$timetosowing)
+hist(Dorm$MCseed)
+
+subdat = Dorm[Dorm$pop=="CC",]
+germ = subdat$germ2 * subdat$nseed #Successes
+notgerm = subdat$nseed - germ #Failures
+mod1 = glm(cbind(germ, notgerm) ~ timetosowing, "binomial", data=subdat)
+mod2 = glm(germ2 ~ timetosowing, "binomial", weights=nseed, data=subdat)
+logLik(mod1) == logLik(mod2)
+
+#Analyse the data to estimate the pattern of germination success in response to variation in the duration of after-ripening. 
+#total dataset
+m <- glm(germ2 ~ timetosowing, "binomial",weights = nseed, data = Dorm)
+summary(m)
+#with 1 day increase in time to sowing, the log odds of germination increased with 0.03 (SE = +- 0.002). 
+#coefs = summary(m)$coef
+#y_hat = coefs[1,1] + coefs[2,1]*Dorm$timetosowing
+#p_hat = invlogit(y_hat)
+#mean(p_hat[which(y==1)]) - mean(p_hat[which(y==0)]) #not with proportions!
+r.squaredGLMM(m) #delta one is more flexible
+
+
+```
+43 % can be explained by the model
+
+
+Are the patterns similar in different populations? 
+
+```{r}
+#lets add populations to the model.
+mp <- glm(germ2 ~ timetosowing * pop, "binomial",weights = nseed, data = Dorm)
+mp$xlevels
+summary(mp)
+```
+Since the populations are so different, which is not really the point of this study, we will look at the data per population instead. We could leave it in the model but the interactions gives it quite some complicity. 
+
+```{r}
+subdat = Dorm[Dorm$pop=="CC",]
+mod2 = glm(germ2 ~ timetosowing, "binomial", weights=nseed, data=subdat)
+summary(mod2)
+#lets see if there are other factors affecting the results.
+mod3 = glm(germ2 ~ timetosowing * MCseed + mother, "binomial", weights=nseed, data=subdat)
+summary(mod3)
+boxplot(subdat$MCseed~subdat$mother)
+#mother should be a random variable but we dont do that yet so lets leave it out for now.
+mod4 = glm(germ2 ~ timetosowing * MCseed, "binomial", weights=nseed, data=subdat)
+summary(mod4)
+```
+Lets make a figure without interaction because the interaction is only explaining very little of the data
+```{r}
+summary(mod4)
+coefs <- summary(mod4)$coef
+#interaction is positive so we can say that heavier seeds increase the time affecting the germination.
+coefs
+x_pred = seq(from=min(subdat$timetosowing, na.rm=T), to=max(subdat$timetosowing, na.rm=T), by=0.01) #making the probability graph
+y_hat = coefs[1,1] + coefs[2,1]*x_pred
+p_hat = invlogit(y_hat)
+y_hat2 = coefs[1,1] + coefs[2,1]*x_pred + coefs[3,1]*sd(subdat$MCseed)
+y_hat3 = coefs[1,1] + coefs[2,1]*x_pred - coefs[3,1]*sd(subdat$MCseed)
+
+#without interaction
+mod5 = glm(germ2 ~ timetosowing + MCseed, "binomial", weights=nseed, data=subdat)
+coefs1 <- summary(mod5)$coef
+x_pred = seq(from=min(subdat$timetosowing, na.rm=T), to=max(subdat$timetosowing, na.rm=T), by=0.01) #making the probability graph
+y_hat1 = coefs1[1,1] + coefs1[2,1]*x_pred
+p_hat1 = invlogit(y_hat1)
+y_hat4 = coefs1[1,1] + coefs1[2,1]*x_pred + coefs1[3,1]*sd(subdat$MCseed)
+y_hat5 = coefs1[1,1] + coefs1[2,1]*x_pred - coefs1[3,1]*sd(subdat$MCseed)
+
+plot(subdat$timetosowing,subdat$germ2,las=1) 
+lines(x_pred,p_hat)
+abline(v=-coefs[1,1]/coefs[2,1], col="blue",lty=2)
+abline(v=-coefs1[1,1]/coefs1[2,1], col="red",lty=2)#v = yhat = 0 because invlogit(0) = 0.5
+abline(h=0.5, col="purple",lty=2)
+lines(x_pred,p_hat1, col = "red")
+lines(x_pred, invlogit(y_hat2), lty=2)
+lines(x_pred, invlogit(y_hat3), lty=2)
+lines(x_pred, invlogit(y_hat4), lty=2, col="red")
+lines(x_pred, invlogit(y_hat5), lty=2, col="red")
+#with heavier seeds it needs more days before germination probability is 0.5% which was seen in the summary table since interaction was a + number
+
+v <- -coefs1[1,1]/coefs1[2,1]
+v
+```
+To calculate the duration of after-ripening needed for a 50% germination rate, we use the equation above to find that this would be 106.7 days in this population.
+
+
+To quantify the seed size effect, we can ask how this changes for a seed that is one standard deviation larger or smaller than the mean.
+
+```{r}
+-(coefs[1,1] + coefs[3,1]*sd(subdat$MCseed))/coefs[2,1] #(intercept + MCseed*sd) / slope time to sowing.
+-(coefs[1,1] - coefs[3,1]*sd(subdat$MCseed))/coefs[2,1]
+
+-(coefs1[1,1] + coefs1[3,1]*sd(subdat$MCseed))/coefs1[2,1] #(intercept + MCseed*sd) / slope time to sowing.
+-(coefs1[1,1] - coefs1[3,1]*sd(subdat$MCseed))/coefs1[2,1]
+```
+
+We could write the results like this: The probability of germination increased with longer duration of after-ripening (Fig. 1, Table 1). A seed of average size would have 50% probability of germinating when sown after 106.7 days of after-ripening. However, there is a small interaction with seed size that shows that for heavier seeds, this is 109 days instead. For a seed one standard deviation larger or smaller than the mean, this period would change to 129.4 days and 84.0 days, respectively. But with the interaction this is 142.2507 and 76.54 days instead.
