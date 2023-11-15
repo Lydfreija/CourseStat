@@ -1,0 +1,422 @@
+---
+title: "Seminar 4"
+author: "Lydwin Wagenaar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Seminar 4
+
+```{r}
+set.seed(187)
+x1 = rnorm(200, 10, 2)
+x2 = 0.5*x1 + rnorm(200, 0, 4)
+y = 0.7*x1 + 2.2*x2 + rnorm(200, 0, 4)
+m = lm(y~x1+x2)
+coefs = summary(m)$coef
+summary(m)
+
+```
+R2 can be calculated like this
+```{r}
+y_hat = coefs[1,1] + coefs[2,1]*x1 + coefs[3,1]*x2
+var(y_hat)
+var(y_hat)/var(y)
+```
+variance explained by each of the predictors x1 and x2:
+
+```{r}
+y_hat1 = coefs[1,1] + coefs[2,1]*x1 + coefs[3,1]*mean(x2)
+var(y_hat1)
+var(y_hat1)/var(y)
+y_hat2 = coefs[1,1] + coefs[2,1]*mean(x1) + coefs[3,1]*x2
+var(y_hat2)
+var(y_hat2)/var(y)
+var(y_hat1) + var(y_hat2)
+
+```
+So, what happened to the last few percent of the variance? Recall that
+V ar(x + y) = V ar(x) + V ar(y) + 2Cov(x, y).
+
+```{r}
+var(y_hat1) + var(y_hat2) + 2*cov(y_hat1, y_hat2)
+#As before, we can also do this by computing:
+coefs[2,1]^2*var(x1)
+
+```
+To include the covariance between the predictors, we can do this in matrix notation V (ˆy) = ˆβTSβˆ, where
+βˆ is a vector of parameter estimates (slopes), S is the covariance matrix for the predictors, and T means
+transposition. Recall the R matrix multiplication operator %*%.
+```{r}
+t(coefs[2:3,1]) %*% cov(cbind(x1,x2)) %*% coefs[2:3,1]
+```
+The most common way to standardize predictor variables is to
+scale them to zero mean and unit variance, a so-called z-transform
+
+```{r}
+x1_z = (x1 - mean(x1))/sd(x1)
+x2_z = (x2 - mean(x2))/sd(x2)
+m = lm(y ~ x1_z + x2_z)
+summary(m)
+
+```
+Another useful transformation could be a natural log-transform, or similarly mean-scaling, which would give
+the slopes units of means, and allow interpreting the change in y per percent change in x. These proportional
+slopes are technically called elasticities
+```{r}
+x1_m = (x1 - mean(x1))/mean(x1)
+x2_m = (x2 - mean(x2))/mean(x2)
+summary(lm(y ~ x1_m + x2_m))
+```
+multicollinearity becomes a potential problem
+when the correlation between the predictors is greater than 0.6 or 0.7.
+OR
+Rules of thumb for what constitutes
+severe variance inflation range from V IF > 3 to V IF > 10. 
+```{r}
+#calculating VIF
+m1 = lm(x1~x2)
+r2 = summary(m1)$r.squared
+1/(1-r2)
+```
+Data Exercise 1:
+Make a series of histograms and plots.
+How are the data distributed? Are there any problematic outliers? How are patterns of trait correlations?
+Which traits are (proportionally) more variable?
+
+We are going to check how carex is affected by environmental variables. Ecologically speaking, it would make sense if the min winter temperature and the max summer temperature are affecting the plants' distributions. Light, snow, soil moisture, and altitude might also be important
+Lets start looking at temperatures 
+
+```{r}
+Plants <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/alpineplants.csv")
+
+#3 weird datapoints with NA
+Plants <- Plants[complete.cases(Plants), ]
+hist(Plants$Carex.bigelowii)
+hist(Plants$Thalictrum.alpinum)
+#both very skewed. Log transformation will likely be necessary
+
+plot(Plants$max_T_winter,Plants$Carex.bigelowii)
+plot(Plants$min_T_summer,Plants$Carex.bigelowii)
+plot(Plants$max_T_winter,Plants$snow)
+
+#look at variables
+hist(Plants$mean_T_winter)
+hist(Plants$max_T_winter)
+hist(Plants$min_T_winter )
+hist(Plants$mean_T_summer)
+hist(Plants$max_T_summer)
+hist(Plants$min_T_summer)
+hist(Plants$light)
+hist(Plants$snow)
+hist(Plants$soil_moist)
+hist(Plants$altitude)
+library("car")
+mbase = lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$light + Plants$snow + Plants$soil_moist + Plants$altitude)
+hist(mbase$residuals)
+vif(mbase)
+
+#OR
+
+#m1 = lm(Plants$min_T_winter~Plants$max_T_summer + Plants$light + Plants$snow + Plants$soil_moist + Plants$altitude)
+#r2 = summary(m1)$r.squared
+#m2 = lm(Plants$max_T_summer~Plants$min_T_winter+ Plants$light + Plants$snow + Plants$soil_moist + Plants$altitude)
+#r2 = summary(m2)$r.squared
+#1/(1-r2)
+#we can see that Min winter temperature are correlated with the amount of snow, and a bit less to soil moisture. 
+
+plot(Plants$min_T_winter, Plants$snow)
+#the colder it is, the less snow there is. 
+
+#real model will exclude snow
+m= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$light + Plants$soil_moist + Plants$altitude)
+
+vif(m) #no multicollinearity problems
+summary(m)
+plot(m)
+#residuals look not perfect but alright.
+#transform it
+Plants$x1_z = (Plants$min_T_winter - mean(Plants$min_T_winter ))/sd(Plants$min_T_winter)
+Plants$x2_z = (Plants$max_T_summer - mean(Plants$max_T_summer ))/sd(Plants$max_T_summer)
+Plants$x3_z = (Plants$light - mean(Plants$light))/sd(Plants$light)
+Plants$x4_z = (Plants$soil_moist- mean(Plants$soil_moist))/sd(Plants$soil_moist)
+Plants$x5_z = (Plants$altitude- mean(Plants$altitude))/sd(Plants$altitude)
+m = lm(log(Carex.bigelowii+1) ~ x1_z + x2_z + x3_z + x4_z + x5_z, Plants)
+plot(m)
+hist(m$residuals)
+summary(m)
+
+#especially variable 1 and 2 are interesting.
+
+# lets try to do it the old fashion way, NOT GOOD!
+mb= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$light + Plants$soil_moist + Plants$altitude + Plants$mean_T_winter + Plants$max_T_winter + Plants$mean_T_summer + Plants$min_T_summer + Plants$snow)
+summary(mb)
+mb= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$light + Plants$soil_moist + Plants$altitude + Plants$max_T_winter + Plants$mean_T_summer + Plants$min_T_summer + Plants$snow)
+summary(mb)
+mb= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$light + Plants$soil_moist + Plants$altitude + Plants$max_T_winter + Plants$mean_T_summer + Plants$min_T_summer)
+mb= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$soil_moist + Plants$altitude + Plants$max_T_winter + Plants$mean_T_summer + Plants$min_T_summer)
+summary(mb)
+mb= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$soil_moist + Plants$altitude + Plants$mean_T_summer + Plants$min_T_summer)
+summary(mb)
+mb= lm(log(Plants$Carex.bigelowii+1)~Plants$min_T_winter + Plants$max_T_summer + Plants$altitude + Plants$mean_T_summer + Plants$min_T_summer)
+summary(mb)
+mb= lm(log(Plants$Carex.bigelowii+1)~ Plants$max_T_summer + Plants$altitude + Plants$mean_T_summer + Plants$min_T_summer)
+summary(mb)
+
+#quite different variables
+```
+
+ANCOVA
+```{r}
+set.seed(12)
+x = rnorm(200, 50, 5)
+gr = factor(c(rep("Male", 100), rep("Female", 100)))
+y = -2 + 1.5*x + rnorm(200, 0, 5)
+y[101:200] = 2 + 0.95*x[101:200] + rnorm(100, 0, 6)
+plot(x, y, pch=c(1,16)[as.numeric(gr)], las=1)
+
+```
+```{r}
+m = lm(y~x*gr)
+anova(m)
+summary(m)
+
+```
+ If we want to extract the male and female slopes and
+intercepts with their standard errors, we can reformulate the model by suppressing the global intercept. (real values instead of that you have to calculate them)
+```{r}
+m2 = lm(y ~ -1 + gr + x:gr)
+summary(m2)
+logLik(m) #assesses the goodness of fit of competing statistical models
+logLik(m2)
+```
+Data exercise: Interpreting linear-model analyses
+
+```{r}
+Blossom <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/blossoms.csv")
+```
+Make a series of histograms and plots.
+How are the data distributed? Are there any problematic outliers? How are patterns of trait correlations?
+Which traits are (proportionally) more variable?
+What about differences between populations? How different are the trait means? Are any of the traits
+detectably different? To get started, the following lines read the data.
+
+Check for outliers
+```{r}
+hist(Blossom$ASD)
+hist(Blossom$GAD)
+hist(Blossom$GSD)
+hist(Blossom$LBL)
+hist(Blossom$LBW)
+hist(Blossom$UBL)
+hist(Blossom$UBW)
+hist(Blossom$GW)
+hist(Blossom$GA)
+
+# No problemetic outliers and everything seems quite normally distributed.
+```
+Check for multi-linearity
+```{r}
+m2 = lm(~Blossom$ASD + Blossom$GAD + Blossom$GSD + Blossom$LBL + Blossom$LBW + Blossom$UBL + Blossom$UBW + Blossom$GW + Blossom$GA)
+
+#m1 = lm(Plants$min_T_winter~Plants$max_T_summer + Plants$light + Plants$snow + Plants$soil_moist + Plants$altitude)
+#r2 = summary(m1)$r.squared
+#m2 = lm(Plants$max_T_summer~Plants$min_T_winter+ Plants$light + Plants$snow + Plants$soil_moist + Plants$altitude)
+#r2 = summary(m2)$r.squared
+#1/(1-r2)
+
+m2 <- lm(Blossom$ASD ~ Blossom$GAD + Blossom$GSD + Blossom$LBL + Blossom$LBW + Blossom$UBL + Blossom$UBW + Blossom$GW + Blossom$GA)
+r2 = summary(m2)$r.squared
+1/(1-r2)
+#ASD seems to not be correlated to any of them 
+m2 <- lm(Blossom$GAD ~ Blossom$ASD + Blossom$GSD + Blossom$LBL + Blossom$LBW + Blossom$UBL + Blossom$UBW + Blossom$GW + Blossom$GA)
+r2 = summary(m2)$r.squared
+1/(1-r2)
+# ASD, GAD are not correlated to any variables.
+m2 <- lm(Blossom$GSD ~ Blossom$ASD + Blossom$GAD + Blossom$LBL + Blossom$LBW + Blossom$UBL + Blossom$UBW + Blossom$GW + Blossom$GA)
+r2 = summary(m2)$r.squared
+1/(1-r2)
+# ASD, GAD, GSD are not correlated to any variables.
+m2 <- lm(Blossom$LBL ~ Blossom$ASD + Blossom$GAD + Blossom$GSD + Blossom$LBW + Blossom$UBL + Blossom$UBW + Blossom$GW + Blossom$GA)
+r2 = summary(m2)$r.squared
+1/(1-r2)
+vif(m2)
+cor(blossom.cor)
+library("psych")
+pairs.panels(Blossom[-c(1:2)],)
+
+#what is the coefficient of variation (CV)
+Blossom <- Blossom[complete.cases(Blossom), ]
+CV <- data.frame(NA)
+CV$CVASD <- sqrt(sd(Blossom$ASD)/mean(Blossom$ASD))
+CV$CVGAD <- sqrt(sd(Blossom$GAD)/mean(Blossom$GAD))
+CV$CVGSD <- sqrt(sd(Blossom$GSD)/mean(Blossom$GSD))
+CV$CVLBL <- sqrt(sd(Blossom$LBL)/mean(Blossom$LBL))
+CV$CVLBW <- sqrt(sd(Blossom$LBW)/mean(Blossom$LBW))
+CV$CVUBL <- sqrt(sd(Blossom$UBL)/mean(Blossom$UBL))
+CV$CVUBW <- sqrt(sd(Blossom$UBW)/mean(Blossom$UBW))
+CV$CVGW <- sqrt(sd(Blossom$GW)/mean(Blossom$GW))
+CV$CVGA <- sqrt(sd(Blossom$GA)/mean(Blossom$GA))
+
+
+```
+
+What about differences between populations? How different are the trait means? Are any of the traits
+detectably different? To get started, the following lines read the data
+
+```{r}
+tapply(Blossom$UBW, Blossom$pop, mean, na.rm=T)
+library(tidyverse)
+
+
+airquality %>%
+   group_by(City, year) %>% 
+   summarise_at(vars("PM25", "Ozone", "CO2"), mean)
+
+Means <- Blossom %>% group_by(pop) %>%
+  summarise_at(vars("GSD","ASD","GAD", "LBL","LBW","UBL","UBW","GW","GA"),c(mean,sd))
+
+```
+After exploring and summarizing the data, fit some linear models to estimate the slopes of one trait on
+another. Interpret the results. Do the analysis on both arithmetic and log scale. Choose traits that belong
+to the same vs. different functional groups, can you detect any patterns in the slopes? Produce tidy figures
+that illustrate the results. Hint: once you have produced a scatterplot, you can add more points (e.g. for a
+different variable) by using the points() function.
+
+```{r}
+# same functional group:
+#LBL and LBW for example:
+model <- lm(LBL ~ LBW, Blossom)
+summary(model)
+# with one increase in unit of LBW, LBL increases 0.88. It has a very small standard error so seems pretty significant.
+plot(model)
+#assumptions are pretty good but we will also look on a log scale.
+modellog <- lm(log(LBL) ~ log(LBW), Blossom)
+summary(modellog)
+
+plot <- ggplot(Blossom, aes(x = LBL, y = LBW))
+plot + geom_point(aes(LBL)) + geom_abline()
+
+Blossom$LBLlog <- log(Blossom$LBL)
+Blossom$LBWlog <- log(Blossom$LBW)
+plot <- ggplot(Blossom, aes(x = LBLlog, y = LBWlog, color = pop))
+plot + geom_point(aes(colour = pop)) + geom_smooth(method="lm") 
+
+#not a very big difference.
+
+  
+#now one that is different. Lets take LBL and ASD
+model <- lm(LBL ~ ASD, Blossom)
+summary(model)
+
+plot(model)
+#assumptions are pretty good but we will also look on a log scale.
+modellog <- lm(log(LBL) ~ log(ASD), Blossom)
+summary(modellog)
+
+plot <- ggplot(Blossom, aes(x = LBL, y = ASD))
+plot + geom_point(aes(LBL)) + geom_abline()
+
+Blossom$LBLlog <- log(Blossom$LBL)
+Blossom$ASDlog <- log(Blossom$ASD)
+plot <- ggplot(Blossom, aes(x = LBLlog, y = ASDlog))
+plot + geom_point(aes(LBLlog)) + stat_smooth(method = "lm")
+
+ggplot(data = Blossom) + 
+  geom_point(mapping = aes(x = LBLlog, 
+                           y = LBWlog, color = "LBWlog")) +
+  geom_point(mapping = aes(x = LBLlog, 
+                           y = ASDlog, color = "ASDlog")) +
+  geom_smooth(mapping = aes(x = LBLlog, 
+                            y = LBWlog, 
+                            color = "LBWlog"),method="lm") + 
+  geom_smooth(mapping = aes(x = LBLlog, 
+                            y = ASDlog, 
+                            color = "ASDlog"),method="lm") +
+  labs(title="",
+        x ="LBLlog", y = "ASDLog/LBWlog", color = "Characteristic")
+
+
+```
+
+```{r}
+Model1 = lm(log(ASD)~log(LBL)*pop, data=Blossom)
+Model2  = lm(log(LBW)~log(LBL)*pop, data=Blossom)
+anova(Model1)
+anova(Model2)
+
+```
+We can remove interaction luckily
+```{r}
+Model1 = lm(log(ASD)~log(LBL) + pop, data=Blossom)
+Model2  = lm(log(LBW)~log(LBL) + pop, data=Blossom)
+anova(Model1)
+anova(Model2)
+```
+Both variables (ASD and LBW) seem to are affected by population and LBL. Population is explaining more variance in ASD model but less in LBW model. In the last model, LBL is explaining more which makes sense because they are way stronger connected as seen in the graph. 
+```{r}
+summary(Model1)
+summary(Model2)
+```
+Many groups seem to be different from the reference group. log(ASD) did not have a relation with log(LBL) but population did have an effect on it (coefficient of variation of population means = .....). For LBL on LBW, this did have a relationship in which LBW increases with 97% when LBL increases 10% (0.97 +- 0.03). There, population had also an effect on LBW.
+
+Oystein 
+
+```{r, fig.height=4, fig.width=4, include=T, echo=T}
+plot(log(Blossom$LBW), log(Blossom$UBW), ylim=c(1,3.5), las=1,
+     xlab="Lower bract width( log mm)",
+     ylab="UBW/GSD (log mm)")
+points(log(Blossom$LBW), log(Blossom$GSD), pch=16)
+```
+
+```{r, include=T, echo=T}
+mUBW = lm(log(UBW)~log(LBW), data=Blossom)
+mGSD = lm(log(GSD)~log(LBW), data=Blossom)
+summary(mUBW)$coef
+summary(mGSD)$coef
+```
+
+Gland-stigma distance appears partly decoupled from variation in overall blossom size, as indicated by the much shallower slope on lower bract width. But does the degree of canalization of this trait differ among populations?
+
+```{r, include=T, echo=T}
+m = lm(log(GSD)~log(LBW)*pop, data=Blossom)
+anova(m)
+```
+
+In an analysis of covariance we start by asking whether the slope differs among groups, as indicated by statistical support for the interaction term in the linear model. Here, the sum of squares for the interaction term is low (seen in relation to the residual sum of squares), leading to weak support. We can therefore conclude that there is limited (but not no!) evidence or heterogeneity of slopes.
+
+```{r}
+m2 = lm(log(GSD)~log(LBW)+pop, data=Blossom)
+anova(m2)
+
+```
+
+The next step in the analysis of covariance is to test for differences in intercepts among groups, as indicated by by the main effect of the grouping variable (here population). The ANOVA table indicates support for population-specific intercepts (i.e. different mean GSD in different populations), and we can then go on to interpret these differences.
+
+```{r}
+summary(m2)
+```
+
+The intercepts for several populations differ from the intercept in the reference population (recall we can always call `levels(factor)` to find out what is the reference level, here the population S1. As a complement to this inference, we could compute e.g. the CV of the population means.
+
+```{r}
+popmeans = tapply(log(Blossom$GSD), Blossom$pop, mean, na.rm=T)
+sd(popmeans)*100
+
+popcvs = tapply(log(Blossom$GSD), Blossom$pop, 
+                function(x) 100*sd(x, na.rm=T))
+popcvs
+mean(popcvs)
+```
+
+The conclusion of our analysis of covariance is that there is heterogeneity in intercepts, but not in slopes. We could write this as follows.
+
+Across the eight study populations, gland-stigma distance increased by 4.7% for a 10% increase in lower bract width (slope on log-log scale = $0.47 \pm 0.05$). The mean gland-stigma distance differed among populations (coefficient of variation of population means = 4.4%).
+```
+
+
+
