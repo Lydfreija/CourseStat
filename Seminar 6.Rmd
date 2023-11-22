@@ -1,0 +1,236 @@
+---
+title: "Seminar 6"
+author: "Lydwin Wagenaar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Seminar 6
+
+Random-effect models allow us to estimate the variance residing at multiple levels, and thus to ask for example
+what percentage of variation in a variable is due to differences among populations, and to differences among
+individuals within populations.
+Consider the following simulated data.
+
+```{r}
+set.seed(145)
+x1 = rnorm(200, 10, 2)
+
+groupmeans = rep(rnorm(10, 20, 4), each=20)
+groupID = as.factor(rep(paste0("Group", 1:10), each=20))
+
+y = 2 + 1.5*x1 + groupmeans + rnorm(200, 0, 2)
+
+plot(x1, y, col=as.numeric(groupID), las=1)
+
+```
+```{r}
+library(glmmTMB)
+
+data = data.frame(y, x1, groupID)
+head(data)
+
+m = glmmTMB(y ~ 1 + (1|groupID), data=data)
+
+summary(m)
+
+```
+The summary table is familiar, and contains some of the same information as we have seen in simple linear
+models and in GLMs. To extract only the part related to the random effect, we can call the function VarCorr,
+and then extract the variances (recall it´s the variances that are additive, not the standard deviations). Note
+that we have to extract an “attribute” of the VarCorr object, rather than e.g. a slot in a list.
+```{r}
+VarCorr(m)
+VarAmongGroups = attr(VarCorr(m)$cond$groupID, "stddev")^2
+VarWithinGroups = attr(VarCorr(m)$cond, "sc")^2
+VarAmongGroups
+var(groupmeans)
+
+```
+The among-group variance is a little bit smaller than the actual variance of the group means. This illustrates
+that mixed models are good at estimating variance components while taking into account the uncertainty
+associated with variation within groups, which will tend to inflate the among-group variance (because the
+latter will include the uncertainty in the estimated means within each group). To get a feeling for how
+this work, we can compute the average sampling variance of each group mean, and subtract it from the
+among-group variance.
+
+```{r}
+mean_sampling_variance = mean(tapply(y, groupID, var)/20)
+var(groupmeans) - mean_sampling_variance
+```
+The result is close to the variance estimated from the mixed model.
+To calculate the percent of the variance explained by groups, we divide by the total estimated variance.
+
+```{r}
+VarAmongGroups/(VarAmongGroups+VarWithinGroups)*100
+```
+To interpret the actual variances, we could e.g. scale the standard deviations by the trait mean to obtain a
+coefficient of variation (CV). To maintain the additivity of the variances, an even better approach is to scale
+the variances themselves by the square of the trait mean, thus obtaining a squared CV, CV 2
+. We scale by
+the square of the mean because variances also have squared units, and we thus obtain a unitless number.
+```{r}
+CV2_Among = VarAmongGroups/mean(x1)^2
+CV2_Within = VarWithinGroups/mean(x1)^2
+CV2_Total = CV2_Among + CV2_Within
+
+#organize it in a table
+df = data.frame(Mean = mean(y), SD = sd(y),
+Among = VarAmongGroups/(VarAmongGroups+VarWithinGroups)*100,
+Within = VarWithinGroups/(VarAmongGroups+VarWithinGroups)*100,
+CV2_Among, CV2_Within, CV2_Total)
+df = apply(df, MARGIN=2, FUN=round, digits=2)
+df
+```
+## Exercise
+
+Pick any of the datasets we have worked with in the course that includes at least one grouping variable, and
+perform a random-effect variance partitioning. Produce a neat table and interpret the results biologically
+and statistically.
+
+
+```{r}
+Blossoms <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/Blossoms.csv")
+
+#plot
+library(ggplot2)
+ggplot(Blossoms, aes(x=LBW, y=LBL, group=pop, col=patch)) +
+  geom_point(aes(shape=pop)) +
+  geom_point(aes(col=patch))
+
+# Variance component analysis
+
+library(glmmTMB)
+m = glmmTMB(LBL ~ 1 + (1|pop) , data=Blossoms)
+summary(m)
+VarCorr(m)
+VarAmongGroups = attr(VarCorr(m)$cond$pop, "stddev")^2
+VarWithinGroups = attr(VarCorr(m)$cond, "sc")^2
+VarAmongGroups
+VarWithinGroups
+
+#variane explained by groups:
+VarAmongGroups/(VarAmongGroups+VarWithinGroups)*100
+```
+Around 24% of the variance is explained by the population.
+
+```{r}
+CV2_Among = VarAmongGroups/mean(Blossoms$LBL, na.rm = TRUE)^2
+CV2_Within = VarWithinGroups/mean(Blossoms$LBL, na.rm = TRUE)^2
+CV2_Total = CV2_Among + CV2_Within
+
+df = data.frame(Mean = mean(Blossoms$LBW, na.rm = TRUE), SD = sd(Blossoms$LBW, na.rm = TRUE),
+Among = VarAmongGroups/(VarAmongGroups+VarWithinGroups)*100,
+Within = VarWithinGroups/(VarAmongGroups+VarWithinGroups)*100,
+CV2_Among, CV2_Within, CV2_Total)
+df = apply(df, MARGIN=2, FUN=round, digits=2)
+df
+
+```
+The mean of our response variable is 19 cm, and its sd = 3.13 cm. Among groups, the variance % is 24% and within groups it is 75% explained. So we can see that populations do explain something but there fixed variables might be more important. This is also what the CV2 shows.
+
+##Random-intercept regression
+We can also use random intercepts to “account for” the non-independence of observations for each group.
+The model syntax for the fixed effects (here x1) is like for linear models, and for the random effects (groupID)
+we use the same syntax as above.
+
+```{r}
+m = glmmTMB(y ~ x1 + (1|groupID), data=data)
+summary(m)
+coef(m)
+
+```
+
+```{r}
+newx = seq(min(x1), max(x1), length.out=200)
+plot(x1, y, las=1)
+for(i in 1:length(levels(groupID))){
+y_hat = coef(m)$cond$groupID[i,1] + coef(m)$cond$groupID[i,2]*newx
+lines(newx, y_hat, col=i)
+}
+
+```
+```{r}
+y_hat = predict(m, newdata=list(x1=newx, groupID=rep("Group5",200)), re.form=NULL)
+y_hat #to predict for a level of your random variable. For example to predict it for one group or one population instead of everything.
+#
+```
+##Data exercise: random-intercept models
+
+Pick any of the datasets we have worked with in the course that includes at least one grouping variable,
+and perform a random-intercept analysis (regression, ANCOVA or ANOVA). Produce relevant summary
+statistics and interpret the results biologically and statistically.
+
+```{r}
+model = glmmTMB(LBL ~ LBW + (1|pop), data=Blossoms)
+summary(model)
+
+
+```
+
+The slope is 0.86. This means that per unit increase of LBW, LBL increases with 0.86. 
+
+```{r}
+coef(model)
+```
+```{r}
+newx = seq(min(Blossoms$LBW,na.rm = T), max(Blossoms$LBW,na.rm=T), length.out=200)
+plot(Blossoms$LBW, Blossoms$LBL, las=1, xlab = "LBW", ylab = "LBL")
+for(i in 1:length(levels(as.factor(Blossoms$pop)))){
+y_hat = coef(model)$cond$pop[i,1] + coef(model)$cond$pop[i,2]*newx
+lines(newx, y_hat, col=i)
+}
+```
+
+```{r}
+VarAmongGroups = attr(VarCorr(model)$cond$pop, "stddev")^2
+VarWithinGroups = attr(VarCorr(model)$cond, "sc")^2
+VarAmongGroups
+VarWithinGroups
+VarAmongGroups/(VarAmongGroups+VarWithinGroups)*100
+library("MuMIn")
+r.squaredGLMM(model)
+```
+28% of the variance is explained by the population. 78% totally is exlained by the total model.
+
+
+```{r}
+dat = Blossoms
+
+dat$pop = as.factor(dat$pop)
+dat$patch = as.factor(paste(dat$pop, dat$patch, "_"))
+
+m = glmmTMB(UBW ~ 1 + (1|pop/patch), data=dat)
+summary(m)
+
+m = glmmTMB(UBW ~ LBW + (1|pop/patch), data=dat)
+summary(m)
+
+```
+There is now much less variance explained by population and patch. This is because a large portion of the
+variance is explained by the fixed predictor.
+
+## Generalized linear mixed models
+
+
+```{r}
+Eul <- read.csv("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/Eulaema.csv")
+
+Eul$SA = as.factor(Eul$SA)
+m = glmmTMB(Eulaema_nigrita~MAP + (1|SA), family="nbinom2", data=dat)
+summary(m)
+
+newMAP = seq(min(dat$MAP), max(dat$MAP), length.out=200)
+plot(dat$MAP, dat$Eulaema_nigrita, las=1)
+for(i in 1:length(levels(dat$SA))){
+y_hat = exp(coef(m)$cond$SA[i,1] + coef(m)$cond$SA[i,2]*newMAP)
+lines(newMAP, y_hat, col="grey")
+}
+y_hat = exp(summary(m)$coef$cond[1,1] + summary(m)$coef$cond[2,1]*newMAP)
+lines(newMAP, y_hat, lwd=2)
+```
+
