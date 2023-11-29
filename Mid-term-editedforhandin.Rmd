@@ -1,0 +1,224 @@
+---
+title: "Mid-term"
+author: "Lydwin Wagenaar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gridExtra)
+library(AICcmodavg)
+library(ggplot2)
+library(psych)
+library(dplyr)
+library(MuMIn)
+```
+
+## Mid-term exercise
+
+Read in the data:
+```{r}
+data <- read.table("C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/R/CourseStat/tephritis.txt", header = T)
+data$Patry <- as.factor(data$Patry)
+data$Hostplant <- as.factor(data$Hostplant)
+data$Sex <- as.factor(data$Sex)
+data$Baltic <- as.factor(data$Baltic)
+```
+
+Exploring the data. Since my research question is involving ovipositor length, I will only look at Female flies
+
+```{r}
+Female <- subset(data, Sex == "Female")
+# 295 observations left
+library("psych")
+pairs.panels(Female[c(4:5)],)
+# Seems to be a connection, I need to include BL in the model as covariate
+range(Female$BL)
+range(Female$OL, na.rm = T) # There are some NA's present in the OL
+Female <- Female[complete.cases(Female[ , c("OL")]), ]
+```
+Summary statistics
+```{r}
+mean(Female$OL)
+sd(Female$OL)
+aggregate(Female$OL, list(Female$Baltic), FUN=mean) 
+aggregate(Female$OL, list(Female$Baltic), FUN=sd) 
+count(Female.E, Hostplant, Patry)
+count(Female.W, Hostplant, Patry) 
+
+```
+The model, based on ecological knowledge, would include OL as response variable, and Hostplant, Patry, BL, and Baltic as explanatory variables (Baltic since there are two places where sympatric populations occur). We will do model selection with AIC (N>40) to see which model is fitting the data best and how many parameters we want to include in the model. No random variables are present in this dataset since all categorical variables are < 3 levels. 
+
+```{r}
+#Total model just to explore
+model <- lm(OL ~ Hostplant * Patry * BL * Baltic, data = Female,na.action = "na.fail")
+dredge(model, rank = "AIC")
+#chooses a quite complicated model
+
+#Possible models based on knowledge of the ecological system
+M1 <- lm(OL ~ Hostplant + Patry + BL + Baltic, data = Female,na.action = "na.fail")
+M2 <- lm(OL ~ Hostplant * Patry + BL + Baltic, data = Female,na.action = "na.fail")
+M3 <- lm(OL ~ Hostplant * Patry * Baltic + BL, data = Female,na.action = "na.fail")
+M4 <- lm(OL ~ Hostplant * Patry * Baltic, data = Female,na.action = "na.fail") 
+M5 <- lm(OL ~ Hostplant * Patry + BL, data = Female,na.action = "na.fail")
+M6 <- lm(OL ~ Hostplant * Patry, data = Female,na.action = "na.fail") 
+M7 <- lm(OL ~ Hostplant + Patry, data = Female,na.action = "na.fail") 
+M8 <- lm(OL ~ Hostplant + BL + Baltic, data = Female,na.action = "na.fail")
+M9 <- lm(OL ~ Hostplant + BL, data = Female,na.action = "na.fail") 
+M10 <- lm(OL ~ Hostplant + Baltic, data = Female,na.action = "na.fail")
+M11 <- lm(OL ~ Hostplant + Patry + Baltic, data = Female,na.action = "na.fail")
+M12 <- lm(OL ~ 1, data = Female,na.action = "na.fail")
+mlist = list(M1, M2, M3, M4, M5, M6, M7, M8, M9, M10, M11, M12)
+
+#perform a AIC test
+aictab(mlist,second.ord = F)
+
+```
+It seems like the variables that affect ovipositor length depend a lot on where the population occurs. Therefore, we will split the data in two instead.
+
+```{r}
+Female.E <- subset(Female, Baltic == "East")
+Female.W <- subset(Female, Baltic == "West")
+
+pairs.panels(Female.E[c(4:5)],) #Still normally distributed
+pairs.panels(Female.W[c(4:5)],) #Still normally distributed
+
+M1 <- lm(OL ~ Hostplant + Patry + BL, data = Female.E,na.action = "na.fail")
+M2 <- lm(OL ~ Hostplant * Patry + BL, data = Female.E,na.action = "na.fail")
+M3 <- lm(OL ~ Hostplant * Patry, data = Female.E,na.action = "na.fail") 
+M4 <- lm(OL ~ Hostplant + Patry, data = Female.E,na.action = "na.fail") 
+M5 <- lm(OL ~ Hostplant + BL, data = Female.E,na.action = "na.fail")
+M6 <- lm(OL ~ Hostplant, data = Female.E,na.action = "na.fail")
+M7 <- lm(OL ~ 1, data = Female.E,na.action = "na.fail")
+mlist = list(M1, M2, M3, M4, M5, M6, M7)
+
+aictab(mlist,second.ord = F)
+
+M1 <- lm(OL ~ Hostplant + Patry + BL, data = Female.W,na.action = "na.fail")
+M2 <- lm(OL ~ Hostplant * Patry + BL, data = Female.W,na.action = "na.fail")
+M3 <- lm(OL ~ Hostplant * Patry, data = Female.W,na.action = "na.fail") 
+M4 <- lm(OL ~ Hostplant + Patry, data = Female.W,na.action = "na.fail") 
+M5 <- lm(OL ~ Hostplant + BL, data = Female.W,na.action = "na.fail")
+M6 <- lm(OL ~ Hostplant, data = Female.W,na.action = "na.fail")
+M7 <- lm(OL ~ 1, data = Female.W,na.action = "na.fail")
+mlist = list(M1, M2, M3, M4, M5, M6, M7)
+
+aictab(mlist,second.ord = F)
+
+
+```
+The best model for the Eastern population is:
+M5 <- lm(OL ~ Hostplant + BL, data = Female.E,na.action = "na.fail")
+
+The best model for the Western population is:
+M2 <- lm(OL ~ Hostplant * Patry + BL, data = Female.W,na.action = "na.fail")
+
+Lets take a closer look at these models.
+
+Western population analysis
+```{r}
+Model.W <- lm(OL ~ Hostplant * Patry + BL, data = Female.W,na.action = "na.fail")
+anova(Model.W)
+summary(Model.W)
+hist(Model.W$residuals) #pretty normally distributed
+# R2 = 59% 
+# get some more direct information about the factors their means and SE
+Female.W$Patry <- relevel(Female.W$Patry, "Sympatry")
+levels(Female.W$Patry)
+Female.W$Patry <- relevel(Female.W$Patry, "Allopatry")
+try <- lm(OL ~ -1 + Hostplant + Hostplant:Patry + BL, data = Female.W,na.action = "na.fail")
+summary(try)
+```
+Create a figure of the results for the Western population
+```{r}
+#Predict based on the model
+new.data <- data.frame(Patry = "Sympatry", Hostplant = "Heterophyllum", BL = seq(min(Female.W$BL,na.rm = T), max(Female.W$BL,na.rm=T), length.out=20))
+newdata1=expand.grid(Patry=c("Sympatry","Allopatry"), Hostplant=c("Heterophyllum","Oleraceum"), BL = seq(min(Female.W$BL,na.rm = T), max(Female.W$BL,na.rm=T), length.out=20))
+pre <- predict(Model.W,newdata1,type = "response", se.fit=T)
+newdata1$predict <- pre$fit
+newdata1$SE <- pre$se.fit
+
+#Create figures
+plot.test1 <- ggplot(Female.W, aes(x = BL, y = OL,
+           group = Hostplant)) +
+           geom_point(aes(col = Hostplant)) + geom_smooth(aes(x = BL, y = predict, color=Hostplant ),data= newdata1, se = F) + geom_smooth(aes(x = BL, y = predict+SE, ),data= newdata1, se = F,linetype="dashed",linewidth=0.5,color="gray60") + geom_smooth(aes(x = BL, y = predict-SE),data= newdata1, se = F, linetype="dashed", linewidth=0.5,color="gray60") +
+  scale_color_manual(values=c(Heterophyllum ="darkgoldenrod1",Oleraceum="darkred")) +
+  labs(x = "Body length (mm)", y = "Ovipositor length (mm)") +
+  ggtitle("West Baltic population") + theme(plot.title = element_text(hjust = 0.5))
+
+Fig.S <- subset(Female.W, Patry == "Sympatry")
+Fig.S.T <- subset(newdata1, Patry == "Sympatry")
+Fig.A <- subset(Female.W, Patry == "Allopatry")
+Fig.A.T <- subset(newdata1, Patry == "Allopatry")
+
+plot.test2 <- ggplot(Fig.S, aes(x = BL, y = OL,
+           group = Hostplant)) +
+           geom_point(aes(col = Hostplant)) + geom_smooth(aes(x = BL, y = predict, color=Hostplant),data= Fig.S.T, se = F) +  geom_smooth(aes(x = BL, y = predict+SE, ),data= Fig.S.T, se = F,linetype="dashed",linewidth=0.5,color="gray60") + geom_smooth(aes(x = BL, y = predict-SE),data= Fig.S.T, se = F, linetype="dashed", linewidth=0.5,color="gray60") +
+  scale_color_manual(values=c(Heterophyllum ="darkgoldenrod1",Oleraceum="darkred")) +
+  labs(x = "Body length (mm)", y = "Ovipositor length (mm)") +
+  ggtitle("Sympatric population") + theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+
+plot.test3 <- ggplot(Fig.A, aes(x = BL, y = OL,
+           group = Hostplant)) +
+           geom_point(aes(col = Hostplant)) + geom_smooth(aes(x = BL, y = predict, color=Hostplant),data= Fig.A.T, se = F) + geom_smooth(aes(x = BL, y = predict+SE, ),data= Fig.A.T, se = F,linetype="dashed",linewidth=0.5,color="gray60") + geom_smooth(aes(x = BL, y = predict-SE),data= Fig.A.T, se = F, linetype="dashed", linewidth=0.5,color="gray60") +
+  scale_color_manual(values=c(Heterophyllum ="darkgoldenrod1",Oleraceum="darkred")) +
+  labs(x = "Body length (mm)", y = "Ovipositor length (mm)") +
+  ggtitle("Allopatric population") + theme(plot.title = element_text(hjust = 0.5),legend.position="none")
+
+grid.arrange(plot.test1, grid.arrange(plot.test2, plot.test3,ncol=2), ncol=1)
+  
+```
+Eastern population analysis
+
+```{r}
+Model.E <- lm(OL ~ Hostplant + BL, data = Female.E,na.action = "na.fail")
+anova(Model.E)
+summary(Model.E)
+hist(Model.E$residuals) #looks very good
+# get some more direct information about the factors their means and SE
+Female.E$Patry <- relevel(Female.E$Patry, "Sympatry")
+levels(Female.W$Patry)
+Female.E$Patry <- relevel(Female.E$Patry, "Allopatry")
+try1 <- lm(OL ~ -1 + Hostplant + BL, data = Female.E,na.action = "na.fail")
+summary(try1)
+```
+Visualize effects of Eastern population
+```{r}
+#Create predicted data
+new.data <- data.frame(Patry = "Sympatry", Hostplant = "Heterophyllum", BL = seq(min(Female.E$BL,na.rm = T), max(Female.E$BL,na.rm=T), length.out=20))
+newdata1=expand.grid(Patry=c("Sympatry","Allopatry"), Hostplant=c("Heterophyllum","Oleraceum"), BL = seq(min(Female.E$BL,na.rm = T), max(Female.E$BL,na.rm=T), length.out=20))
+pre <- predict(Model.E,newdata1,type = "response", se.fit=T)
+newdata1$predict <- pre$fit
+newdata1$SE <- pre$se.fit
+
+#Create plots
+plot.test1 <- ggplot(Female.E, aes(x = BL, y = OL,
+           group = Hostplant)) +
+           geom_point(aes(col = Hostplant)) + geom_smooth(aes(x = BL, y = predict, color=Hostplant ),data= newdata1, se = F) + geom_smooth(aes(x = BL, y = predict+SE, ),data= newdata1, se = F,linetype="dashed",linewidth=0.5,color="gray60") + geom_smooth(aes(x = BL, y = predict-SE),data= newdata1, se = F, linetype="dashed", linewidth=0.5,color="gray60") +
+  scale_color_manual(values=c(Heterophyllum ="darkgoldenrod1",Oleraceum="darkred")) +
+  labs(x = "Body length (mm)", y = "Ovipositor length (mm)") +
+  ggtitle("East Baltic population") + theme(plot.title = element_text(hjust = 0.5))
+
+Fig.S <- subset(Female.E, Patry == "Sympatry")
+Fig.S.T <- subset(newdata1, Patry == "Sympatry")
+Fig.A <- subset(Female.E, Patry == "Allopatry")
+Fig.A.T <- subset(newdata1, Patry == "Allopatry")
+
+plot.test2 <- ggplot(Fig.S, aes(x = BL, y = OL,
+           group = Hostplant)) +
+           geom_point(aes(col = Hostplant)) + geom_smooth(aes(x = BL, y = predict, color=Hostplant),data= Fig.S.T, se = F) +  geom_smooth(aes(x = BL, y = predict+SE, ),data= Fig.S.T, se = F,linetype="dashed",linewidth=0.5,color="gray60") + geom_smooth(aes(x = BL, y = predict-SE),data= Fig.S.T, se = F, linetype="dashed", linewidth=0.5,color="gray60") +
+  scale_color_manual(values=c(Heterophyllum ="darkgoldenrod1",Oleraceum="darkred")) +
+  labs(x = "Body length (mm)", y = "Ovipositor length (mm)") +
+  ggtitle("Sympatric population") + theme(plot.title = element_text(hjust = 0.5), legend.position = "none")
+
+plot.test3 <- ggplot(Fig.A, aes(x = BL, y = OL,
+           group = Hostplant)) +
+           geom_point(aes(col = Hostplant)) + geom_smooth(aes(x = BL, y = predict, color=Hostplant),data= Fig.A.T, se = F) + geom_smooth(aes(x = BL, y = predict+SE, ),data= Fig.A.T, se = F,linetype="dashed",linewidth=0.5,color="gray60") + geom_smooth(aes(x = BL, y = predict-SE),data= Fig.A.T, se = F, linetype="dashed", linewidth=0.5,color="gray60") +
+  scale_color_manual(values=c(Heterophyllum ="darkgoldenrod1",Oleraceum="darkred")) +
+  labs(x = "Body length (mm)", y = "Ovipositor length (mm)") +
+  ggtitle("Allopatric population") + theme(plot.title = element_text(hjust = 0.5),legend.position="none")
+
+grid.arrange(plot.test1, grid.arrange(plot.test2, plot.test3,ncol=2), ncol=1)
+  
+```
