@@ -1,0 +1,214 @@
+---
+title: "Exam hand in"
+author: "Lydwin Wagenaar"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(psych)
+library(dplyr)
+library(glmmTMB)
+library(AICcmodavg)
+library(MuMIn)
+library(car)
+library(performance)
+library(ggplot2)
+library(gridExtra)
+```
+
+## Exam Lydwin Wagenaar, Statistics course
+Read in the data and remove the variables not necessary for the analysis:
+```{r}
+Data <- read.csv(file="C:/Users/ly5276wa/Work Folders/Desktop/phd/Courses/Statistics course/Exam/Exam2023_data.csv")
+#keep only the variables are of interest
+Data.use <- Data[-c(6:7,10:19,21:23,29:38)]
+#I want to take into account all the seedlings (an eucalyptus can grow around 1 meter per year and we do not know when they stopped having cattle in the area)
+Data.use$tot.Euc <- Data.use$euc_sdlgs0_50cm + Data.use$euc_sdlgs50cm.2m + Data.use$euc_sdlgs.2m
+
+dat.e <- Data.use[-c(11:13)]
+```
+
+Explore the data:
+```{r}
+hist(Data.use$tot.Euc)
+#Distribution makes sense because it is count data --> poisson distribution or negative binomial distribution necessary
+#There does seem to be an outlier of over 80 seedlings in a plot. We do not have a good reason to remove this outlier yet so we leave it in but need to check how much it affects the results. 
+
+pairs.panels(dat.e[c(6:11)],)
+#Aspect and landscape position have a connection which is logical and I will have to choose one of them if I need to include it into the model
+
+#remove rows with NA to have a nice clean dataset
+dat.e <- na.omit(dat.e)
+
+#Get some more information about the response variable
+range(dat.e$tot.Euc)
+mean(dat.e$tot.Euc)
+sd(dat.e$tot.Euc)
+count(dat.e, tot.Euc == 0)
+```
+Model selection. The sample size > 40 so we can progress by looking at the AIC:
+```{r}
+model1 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Aspect + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "poisson")
+model2 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Landscape.position + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "poisson")
+model3 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Aspect + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "poisson")
+model4 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "poisson")
+model5 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "poisson")
+model6 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Landscape.position + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "poisson")
+
+mlist = list(model1,model2,model3,model4,model5,model6)
+aictab(mlist,second.ord = F)
+summary(model1)
+# Overdispersion problems (deviance >>> residuals) so we will go over to a negative binomial distribution instead
+```
+
+Negative binomial model selection:
+```{r}
+model1 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Aspect + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+model2 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Landscape.position + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+model3 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Landscape.position + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+model4 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+model5 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+model6 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Aspect + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+
+mlist = list(model1,model2,model3,model4,model5,model6)
+aictab(mlist,second.ord = F)
+#model 5 and 2 seem pretty good, but 5 seems better than two and is simpler so we will go with this model.
+
+Main.model <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e, na.action = na.exclude, family = "nbinom2")
+```
+
+The model results:
+```{r}
+summary(Main.model)
+check_collinearity(Main.model) #no problems with colinearity 
+r.squaredGLMM(Main.model) #negative binomial --> can look at lognormal which shows that 14% is explained by fixed effects and 67% is explained by total model.
+```
+Figure bare ground cover:
+```{r}
+# Use predict function to create figures based on the model
+NewBC1 = seq(min(dat.e$BareGround_cover, na.rm = T), max(dat.e$BareGround_cover, na.rm = T), length.out = length(dat.e$Aspect))
+Newdis1 = rep(mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T), length(NewBC1)) #keep the distance from Eu. trees on mean.
+NewCC1 = rep(mean(dat.e$Euc_canopy_cover, na.rm = T), length(NewBC1)) #keep the Canopy cover on mean.
+
+Predict = predict(Main.model, newdata=list(BareGround_cover=NewBC1, 
+                                Distance_to_Eucalypt_canopy.m.=Newdis1, Euc_canopy_cover=NewCC1, 
+                                Season = dat.e$Season, Property = dat.e$Property), 
+                type="response",re.form=~0) #we keep the random effects on 0
+
+# now we look at how it is with a mean + sd distance from tree
+
+Newdis.p = rep(mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T) + sd(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm=T), length(NewBC1)) #keep the distance from Eu. trees on mean.
+
+Predict.p = predict(Main.model, newdata=list(BareGround_cover=NewBC1, 
+                                Distance_to_Eucalypt_canopy.m.=Newdis.p, Euc_canopy_cover=NewCC1, 
+                                Season = dat.e$Season, Property = dat.e$Property), 
+                type="response",re.form=~0) #we keep the random effects on 0
+
+# now we look at how it is with a mean - sd distance from tree
+Newdis.m = rep(mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T) - sd(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm=T), length(NewBC1))
+Predict.m = predict(Main.model, newdata=list(BareGround_cover=NewBC1, 
+                                Distance_to_Eucalypt_canopy.m.=Newdis.m, Euc_canopy_cover=NewCC1, 
+                                Season = dat.e$Season, Property = dat.e$Property), 
+                type="response",re.form=~0) #we keep the random effects on 0
+
+
+#creating the figure
+Colors <- c("Mean" = "black", "Mean + SE" = "darkgoldenrod1", "Mean - SE" = "darkred")
+plot.1 <- ggplot(dat.e, aes(x = BareGround_cover, y = tot.Euc)) +
+  geom_point(col = "darkgrey") +
+  geom_smooth(aes(x = NewBC1, y = Predict,color = "Mean")) +
+  geom_smooth(aes(x = NewBC1, y = Predict.p, col = "Mean + SE"), linewidth=0.8, linetype = "dashed") +
+  geom_smooth(aes(x = NewBC1, y = Predict.m,col = "Mean - SE"), linewidth=0.8, linetype = "dashed") +
+  labs(x = "Bare ground cover (%)", y = "# Eucalyptus seedlings",color = "Distance to tree:") +
+    scale_color_manual(values = Colors) + theme(legend.position="none")
+plot.1
+```
+Now for canopy cover:
+```{r}
+# Use predict function to create figures based on the model
+NewCC = seq(min(dat.e$Euc_canopy_cover, na.rm = T), max(dat.e$BareGround_cover, na.rm = T), length.out = length(dat.e$Aspect))
+Newdis = rep(mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T), length(NewCC)) #keep the distance from Eu. trees on mean.
+NewBC = rep(mean(dat.e$BareGround_cover, na.rm = T), length(NewCC)) #keep the Canopy cover on mean.
+
+Predict.2 = predict(Main.model, newdata=list(BareGround_cover=NewBC, 
+                                Distance_to_Eucalypt_canopy.m.=Newdis,
+                                Euc_canopy_cover=NewCC, 
+                                Season = dat.e$Season, Property = dat.e$Property),
+                            type="response",re.form=~0) #we keep the random effects on 0
+
+# now we look at how it is with a mean + sd distance from tree
+
+Newdis.p.2 = rep(mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T) + sd(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm=T), length(NewCC)) #keep the distance from Eu. trees on mean.
+
+Predict.p.2 = predict(Main.model, newdata=list(BareGround_cover=NewBC, 
+                                Distance_to_Eucalypt_canopy.m.=Newdis.p.2, 
+                                Euc_canopy_cover=NewCC, 
+                                Season = dat.e$Season, Property = dat.e$Property), 
+                type="response",re.form=~0) #we keep the random effects on 0
+
+# now we look at how it is with a mean - sd distance from tree
+Newdis.m.2 = rep(mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T) - sd(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm=T), length(NewCC))
+Predict.m.2 = predict(Main.model, newdata=list(BareGround_cover=NewBC, 
+                                Distance_to_Eucalypt_canopy.m.=Newdis.m.2, 
+                                Euc_canopy_cover=NewCC, 
+                                Season = dat.e$Season, Property = dat.e$Property), 
+                type="response",re.form=~0) #we keep the random effects on 0
+
+Colors <- c("Mean" = "black", "Mean + SE" = "darkgoldenrod1", "Mean - SE" = "darkred")
+plot.2 <- ggplot(dat.e, aes(x = Euc_canopy_cover, y = tot.Euc)) +
+  geom_point(col = "darkgrey") +
+  geom_smooth(aes(x = NewCC, y = Predict.2,color = "Mean")) +
+  geom_smooth(aes(x = NewCC, y = Predict.p.2, col = "Mean + SE"), linewidth=0.8, linetype = "dashed") +
+  geom_smooth(aes(x = NewCC, y = Predict.m.2,col = "Mean - SE"), linewidth=0.8, linetype = "dashed") +
+  labs(x = "Eucalyptus canopy cover (%)", y = "",color = "Distance to tree") +
+    scale_color_manual(values = Colors) + theme(legend.position = c(0.9,0.9))
+plot.2
+
+```
+End figure:
+```{r}
+grid.arrange(plot.1, plot.2, ncol=2)
+
+```
+
+What happens if we remove the outlier:
+```{r}
+dat.e.o <- subset(dat.e, tot.Euc < 80) #removed outlier
+
+model1 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Aspect + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+model2 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Landscape.position + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+model3 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Landscape.position + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+model4 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+model5 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+model6 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Aspect + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+
+mlist = list(model1,model2,model3,model4,model5,model6)
+aictab(mlist,second.ord = F)
+
+# 5 is still the best model so it did not affect model selection too much
+
+Main.model1 <- glmmTMB(tot.Euc ~ Euc_canopy_cover + BareGround_cover + Distance_to_Eucalypt_canopy.m. + (1|Season) + (1|Property), data = dat.e.o, na.action = na.exclude, family = "nbinom2")
+
+summary(Main.model1) # the effects are a bit less strong, but very similar otherwise
+#so we will keep the outlier in
+r.squaredGLMM(Main.model1) #we can see that the fixed effect do explain less of the model without the outlier which is also what we found in the summary table.
+
+#since we do not have a good reason to expect that this outlier was caused by a measurement error, and it does not change the patterns of the results, we will include the outlier in the analysis.
+```
+
+Effect sizes:
+```{r}
+#Ground cover
+coefs <- summary(Main.model)$coef
+exp(coefs$cond[1,1] + coefs$cond[3,1]*0 + coefs$cond[2,1]*mean(dat.e$Euc_canopy_cover,na.rm = T) + coefs$cond[4,1]*mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T))
+exp(coefs$cond[1,1] + coefs$cond[3,1]*100 + coefs$cond[2,1]*mean(dat.e$Euc_canopy_cover,na.rm = T) + coefs$cond[4,1]*mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T))
+
+#Canopy cover
+exp(coefs$cond[1,1] + coefs$cond[2,1]*0 + coefs$cond[3,1]*mean(dat.e$BareGround_cover,na.rm = T) + coefs$cond[4,1]*mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T))
+exp(coefs$cond[1,1] + coefs$cond[2,1]*100 + coefs$cond[3,1]*mean(dat.e$BareGround_cover,na.rm = T) + coefs$cond[4,1]*mean(dat.e$Distance_to_Eucalypt_canopy.m.,na.rm = T))
+
+#distance
+1-exp(coefs$cond[4,1])
+```
